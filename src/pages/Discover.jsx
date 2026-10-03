@@ -1,13 +1,13 @@
 import { Component, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
-import { MapContainer, TileLayer, Marker, Circle, useMap, useMapEvents } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Circle, CircleMarker, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { TopBar, SaveButton } from '../components/bits.jsx';
 import Icon from '../components/Icon.jsx';
 import Globe from '../components/Globe.jsx';
 import { ReportSheet } from './Place.jsx';
-import { getDiscover, DISCOVER_CATS, REFRESH_DAYS, cellOf, ageLabel } from '../lib/discover.js';
+import { getDiscover, DISCOVER_CATS, REFRESH_DAYS, cellOf, ageLabel, favicon } from '../lib/discover.js';
 import { searchPlaces, getMyLocation, reverseGeocode, mapsLink, distanceKm } from '../lib/api.js';
 import { useIsDesktop } from '../lib/useMedia.js';
 
@@ -21,17 +21,34 @@ class MapBoundary extends Component {
   }
 }
 
-const pin = (n, active, ai) => L.divIcon({
+const pin = (n, active, trusted) => L.divIcon({
   className: '',
-  iconSize: [30, 30],
-  iconAnchor: [15, 15],
-  html: `<div style="width:30px;height:30px;border-radius:15px;display:flex;align-items:center;justify-content:center;font:700 13px 'DM Sans',sans-serif;
-    background:${active ? '#2B2420' : ai ? '#E9C46A' : '#B5694A'};color:${ai && !active ? '#2B2420' : '#FFFDF9'};border:2px solid #FFFDF9;box-shadow:0 4px 10px rgba(43,36,32,.3)">${n}</div>`
+  iconSize: [34, 34],
+  iconAnchor: [17, 17],
+  html: `<div style="position:relative;width:34px;height:34px;border-radius:17px;display:flex;align-items:center;justify-content:center;font:700 13px 'DM Sans',sans-serif;
+    background:${active ? '#2B2420' : trusted ? '#B5694A' : '#FFFDF9'};color:${active || trusted ? '#FFFDF9' : '#2B2420'};
+    border:2px solid ${trusted || active ? '#FFFDF9' : '#2B2420'};box-shadow:0 4px 10px rgba(43,36,32,.3)">${n}
+    ${trusted ? '<span style="position:absolute;top:-7px;right:-7px;width:18px;height:18px;border-radius:9px;background:#E9C46A;color:#2B2420;font-size:11px;display:flex;align-items:center;justify-content:center;border:1.5px solid #FFFDF9">★</span>' : ''}</div>`
 });
 
-function FlyTo({ target }) {
+// What we look across before the real sources come back
+const LOOKING_AT = [
+  { domain: 'google.com', label: 'Google Search' },
+  { domain: 'instagram.com', label: 'Instagram' },
+  { domain: 'openstreetmap.org', label: 'OpenStreetMap' },
+  { domain: 'wikivoyage.org', label: 'Wikivoyage' },
+  { domain: 'blogger.com', label: 'Travel blogs' }
+];
+
+const STEPS = [
+  ['map', 'Checking real places on the map'],
+  ['web', 'Searching blogs, Instagram, travel and review sites'],
+  ['verify', 'Pinning places and checking how trusted they are']
+];
+
+function FlyTo({ target, zoom = 14 }) {
   const map = useMap();
-  useEffect(() => { if (target) map.flyTo([target.lat, target.lon], Math.max(map.getZoom(), 14), { duration: 0.8 }); }, [target, map]);
+  useEffect(() => { if (target) map.flyTo([target.lat, target.lon], Math.max(map.getZoom(), zoom), { duration: 0.8 }); }, [target, map, zoom]);
   return null;
 }
 
@@ -55,8 +72,13 @@ export default function Discover() {
   const desktop = useIsDesktop();
 
   const [state, setState] = useState({ status: lat == null ? 'need_place' : 'loading' });
+  const [progress, setProgress] = useState({ steps: {}, sources: [] });
   const [mapCenter, setMapCenter] = useState(null);
+  const [popupHidden, setPopupHidden] = useState(false);
   const [active, setActive] = useState(null);
+  const [me, setMe] = useState(null);
+  const [locating, setLocating] = useState(false);
+  const [onlyTrusted, setOnlyTrusted] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const listRefs = useRef({});
 
@@ -69,9 +91,16 @@ export default function Discover() {
   const load = async (refresh = false) => {
     if (lat == null) { setState({ status: 'need_place' }); return; }
     setState({ status: 'loading' });
+    setProgress({ steps: {}, sources: [] });
     setActive(null);
+    setPopupHidden(false);
+    const onEvent = (ev) => setProgress((p) => {
+      if (ev.type === 'step') return { ...p, steps: { ...p.steps, [ev.id]: ev } };
+      if (ev.type === 'sources') return { ...p, sources: ev.sources || [] };
+      return p;
+    });
     try {
-      setState(await getDiscover(cat, lat, lon, { place: name, refresh }));
+      setState(await getDiscover(cat, lat, lon, { place: name, refresh, onEvent }));
     } catch {
       setState({ status: 'error', message: 'Could not reach Wanderpin. Check your connection.' });
     }
@@ -79,20 +108,40 @@ export default function Discover() {
 
   useEffect(() => { load(); }, [cat, lat, lon]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const locateMe = async () => {
+    setLocating(true);
+    try {
+      const pos = await getMyLocation();
+      setMe({ ...pos, t: Date.now() });
+      if (lat == null) {
+        const where = await reverseGeocode(pos.lat, pos.lon);
+        setPlace({ ...pos, name: where.name });
+      }
+    } catch { alert('Location is off. Allow location access, or search a city instead.'); } finally { setLocating(false); }
+  };
+
   const items = state.items || [];
   const center = lat != null ? { lat, lon } : null;
   const sameCell = (a, b) => { const x = cellOf(a.lat, a.lon), y = cellOf(b.lat, b.lon); return x.i === y.i && x.j === y.j; };
-  const moved = !!(mapCenter && center && !sameCell(mapCenter, center));
+  const moved = !!(mapCenter && center && !sameCell(mapCenter, center)) && state.status !== 'loading';
   const age = state.updatedAt ? Date.now() - state.updatedAt : 0;
   const canRefresh = age > REFRESH_DAYS * 86400000;
   const label = DISCOVER_CATS[cat].label;
   const area = state.area || name;
 
-  const sorted = useMemo(() => items.map((it, i) => ({ ...it, n: i + 1, dist: center ? distanceKm(center.lat, center.lon, it.lat, it.lon) : null })), [items]); // eslint-disable-line
+  const numbered = useMemo(() => items.map((it, i) => ({ ...it, n: i + 1, dist: center ? distanceKm(center.lat, center.lon, it.lat, it.lon) : null })), [items]); // eslint-disable-line
+  const trustedCount = numbered.filter((i) => i.trusted).length;
+  const shown = onlyTrusted ? numbered.filter((i) => i.trusted) : numbered;
 
   const focus = (it) => {
     setActive(it);
     listRefs.current[it.id]?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  };
+
+  const searchHere = async () => {
+    const where = await reverseGeocode(mapCenter.lat, mapCenter.lon);
+    setPlace({ ...mapCenter, name: where.name });
+    setMapCenter(null);
   };
 
   return (
@@ -108,13 +157,14 @@ export default function Discover() {
         ))}
       </div>
 
-      <LocationPicker current={area} onPick={(p) => setPlace(p)} />
+      <LocationPicker current={area} onPick={(p) => setPlace(p)} onLocate={locateMe} locating={locating} />
 
       {state.status === 'need_place' && (
         <div className="empty card" style={{ padding: 32 }}>
           <Icon name="pin" size={32} />
           <b style={{ fontSize: 18, color: 'var(--ink)' }}>Where should we look for {label.toLowerCase()}?</b>
           <div>Use your location or search a city above, like Lucknow, Goa or Manali.</div>
+          <button className="btn accent" onClick={locateMe} disabled={locating}><Icon name="locate" size={18} />{locating ? 'Finding you…' : 'Use my location'}</button>
         </div>
       )}
 
@@ -122,40 +172,42 @@ export default function Discover() {
         <div className="discover-layout">
           <div className="discover-map">
             <MapBoundary>
-            <MapContainer center={[center.lat, center.lon]} zoom={12} scrollWheelZoom={desktop} style={{ height: '100%', width: '100%', borderRadius: 22 }}>
-              <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-              <Recenter center={center} />
-              <WatchMove onMove={setMapCenter} />
-              <FlyTo target={active} />
-              <Circle center={[cellOf(lat, lon).center.lat, cellOf(lat, lon).center.lon]} radius={11000}
-                pathOptions={{ color: '#B5694A', weight: 1, fillOpacity: 0.04, dashArray: '4 6' }} />
-              {sorted.map((it) => (
-                <Marker key={it.id} position={[it.lat, it.lon]} icon={pin(it.n, active?.id === it.id, it.source === 'ai')}
-                  eventHandlers={{ click: () => focus(it) }} title={it.name} />
-              ))}
-            </MapContainer>
+              <MapContainer center={[center.lat, center.lon]} zoom={12} scrollWheelZoom={desktop} zoomControl={desktop} style={{ height: '100%', width: '100%' }}>
+                <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                <Recenter center={center} />
+                <WatchMove onMove={(c) => { setMapCenter(c); setPopupHidden(false); }} />
+                <FlyTo target={active} />
+                <FlyTo target={me} zoom={13} />
+                <Circle center={[cellOf(lat, lon).center.lat, cellOf(lat, lon).center.lon]} radius={11000}
+                  pathOptions={{ color: '#B5694A', weight: 1, fillOpacity: 0.04, dashArray: '4 6' }} />
+                {me && <CircleMarker center={[me.lat, me.lon]} radius={8} pathOptions={{ color: '#FFFDF9', weight: 3, fillColor: '#2F6FEB', fillOpacity: 1 }} />}
+                {shown.map((it) => (
+                  <Marker key={it.id} position={[it.lat, it.lon]} icon={pin(it.n, active?.id === it.id, it.trusted)}
+                    eventHandlers={{ click: () => focus(it) }} title={it.name} zIndexOffset={it.trusted ? 100 : 0} />
+                ))}
+              </MapContainer>
             </MapBoundary>
-            {moved && (
-              <button className="btn" style={{ position: 'absolute', top: 14, left: '50%', transform: 'translateX(-50%)', zIndex: 500, height: 42, boxShadow: '0 8px 20px rgba(43,36,32,.25)' }}
-                onClick={async () => {
-                  const where = await reverseGeocode(mapCenter.lat, mapCenter.lon);
-                  setPlace({ ...mapCenter, name: where.name });
-                  setMapCenter(null);
-                }}>
-                <Icon name="search" size={18} />Search this area
-              </button>
+
+            {moved && !popupHidden && (
+              <div className="map-popup" role="dialog" aria-label="Search this area">
+                <span style={{ fontSize: 13, opacity: .85 }}>New area</span>
+                <button className="btn accent" style={{ height: 38, padding: '0 14px' }} onClick={searchHere}><Icon name="search" size={16} />Search this area</button>
+                <button className="icon-btn" style={{ width: 32, height: 32, border: 'none', background: 'transparent', color: 'var(--paper)' }} aria-label="Dismiss" onClick={() => setPopupHidden(true)}><Icon name="close" size={16} /></button>
+              </div>
             )}
+
+            <button className="map-locate" onClick={locateMe} aria-label="Show my location" disabled={locating}>
+              <Icon name="locate" size={20} className={locating ? 'spin' : ''} />
+            </button>
+            <div className="map-legend">
+              <span><b style={{ color: '#E9C46A' }}>★</b> Trusted</span>
+              <span><i style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 5, border: '1.5px solid var(--ink)', background: 'var(--paper)' }} /> Less known</span>
+            </div>
           </div>
 
           <div className="discover-list">
-            {state.status === 'loading' && (
-              <div className="card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14, padding: 32, textAlign: 'center' }}>
-                <Globe size={90} />
-                <b style={{ fontSize: 18 }}>Finding the best {label.toLowerCase()}{area ? ` around ${area}` : ''}…</b>
-                <div className="sub" style={{ maxWidth: 360 }}>If nobody has searched this area yet, our AI checks real places on the map. It takes a few seconds the first time, then it's instant for everyone.</div>
-              </div>
-            )}
+            {state.status === 'loading' && <SearchingPanel label={label} area={area} progress={progress} />}
 
             {state.status === 'ok' && (
               <>
@@ -163,37 +215,31 @@ export default function Discover() {
                   <div>
                     <h2 style={{ fontSize: 24 }}>{label} in {area}</h2>
                     <div className="sub" style={{ fontSize: 13 }}>
-                      {state.ai ? 'AI picks from real places' : 'Popular places from OpenStreetMap'} · {ageLabel(state.updatedAt)}
+                      {state.mode === 'web' ? 'AI picks from across the web' : state.ai ? 'AI picks' : 'Popular places from OpenStreetMap'} · {ageLabel(state.updatedAt)}
                       {state.searches > 1 ? ` · searched ${state.searches} times` : ''}
                     </div>
                   </div>
                   {canRefresh && <button className="chip row" style={{ gap: 6 }} onClick={() => load(true)}><Icon name="clock" size={16} />Refresh picks</button>}
                 </div>
-                <div className="list single">
-                  {sorted.map((it) => (
-                    <div key={it.id} ref={(el) => { listRefs.current[it.id] = el; }}
-                      className="card" onClick={() => setActive(it)}
-                      style={{ display: 'flex', gap: 12, alignItems: 'flex-start', cursor: 'pointer', outline: active?.id === it.id ? '2px solid var(--ink)' : 'none' }}>
-                      <span style={{ width: 32, height: 32, borderRadius: 16, flexShrink: 0, background: it.source === 'ai' ? '#E9C46A' : 'var(--accent)', color: it.source === 'ai' ? 'var(--ink)' : 'var(--paper)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 14 }}>{it.n}</span>
-                      <div className="grow" style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                        <b style={{ fontSize: 16 }}>{it.name}</b>
-                        {it.why && <div style={{ fontSize: 14, lineHeight: 1.45, color: 'var(--muted)' }}>{it.why}</div>}
-                        <div className="row wrap" style={{ gap: 6, marginTop: 2 }}>
-                          {it.bestTime && <span className="tag" style={{ background: 'var(--teal-soft)', color: 'var(--teal)' }}><Icon name="clock" size={12} />{it.bestTime}</span>}
-                          {(it.tags || []).map((t) => <span key={t} className="tag" style={{ background: 'var(--cream)', border: '1px solid var(--line)' }}>{t}</span>)}
-                          {it.source === 'ai' && <span className="tag" style={{ background: 'var(--sand-soft)' }}>Local favourite</span>}
-                          {it.dist != null && <span className="sub" style={{ fontSize: 12 }}>{it.dist.toFixed(1)} km</span>}
-                        </div>
-                      </div>
-                      <div className="row" style={{ gap: 6 }} onClick={(e) => e.stopPropagation()}>
-                        <a className="icon-btn" style={{ width: 40, height: 40 }} href={mapsLink(it)} target="_blank" rel="noreferrer" aria-label={`Directions to ${it.name}`}><Icon name="route" size={18} /></a>
-                        <SaveButton item={{ type: cat === 'sight' || cat === 'busy' || cat === 'quiet' ? 'sight' : cat === 'stay' ? 'stay' : cat === 'couple' ? 'couple' : cat === 'cafe' ? 'cafe' : 'food', name: it.name, lat: it.lat, lon: it.lon, city: area, note: it.why }} size={40} />
-                      </div>
-                    </div>
-                  ))}
+
+                {state.sources?.length > 0 && <SourcesStrip sources={state.sources} />}
+
+                <div className="row wrap" style={{ gap: 8 }}>
+                  <button className={`chip ${!onlyTrusted ? 'on' : ''}`} onClick={() => setOnlyTrusted(false)}>All {numbered.length}</button>
+                  <button className={`chip row ${onlyTrusted ? 'on' : ''}`} style={{ gap: 6 }} onClick={() => setOnlyTrusted(true)} disabled={!trustedCount}>
+                    <span style={{ color: '#E9C46A' }}>★</span> Trusted only {trustedCount}
+                  </button>
                 </div>
+
+                <div className="list single">
+                  {shown.map((it) => <PickCard key={it.id} it={it} cat={cat} area={area} active={active?.id === it.id}
+                    setRef={(el) => { listRefs.current[it.id] = el; }} onClick={() => setActive(it)} />)}
+                </div>
+
+                <TrustNote />
+                {state.entryPoint && <SearchSuggestions html={state.entryPoint} />}
                 <div className="sub" style={{ fontSize: 12, lineHeight: 1.6 }}>
-                  These picks are shared with every Wanderpin traveller searching this area, and refresh every month. Always check opening hours before you go.
+                  Shared with every Wanderpin traveller searching this area and refreshed monthly. Always check opening hours before you go.
                   {' '}<button className="linkish" style={{ fontSize: 12 }} onClick={() => setReportOpen(true)}>Report a wrong place</button>
                 </div>
               </>
@@ -219,10 +265,131 @@ export default function Discover() {
   );
 }
 
-function LocationPicker({ current, onPick }) {
+function SearchingPanel({ label, area, progress }) {
+  const real = progress.sources || [];
+  const logos = real.length ? real.slice(0, 12).map((s) => ({ domain: s.domain, label: s.domain })) : LOOKING_AT;
+  return (
+    <div className="card searching" aria-live="polite">
+      <div className="row" style={{ gap: 14 }}>
+        <Globe size={56} />
+        <div>
+          <b style={{ fontSize: 18 }}>Finding the best {label.toLowerCase()}{area ? ` around ${area}` : ''}</b>
+          <div className="sub" style={{ fontSize: 13 }}>First search for an area takes about 15–30 seconds. After that it's instant for everyone.</div>
+        </div>
+      </div>
+
+      <div className="list single" style={{ gap: 8 }}>
+        {STEPS.map(([id, text]) => {
+          const st = progress.steps[id];
+          const done = st?.status === 'done';
+          const on = st?.status === 'start';
+          return (
+            <div key={id} className="row" style={{ gap: 10, opacity: done || on ? 1 : .45 }}>
+              <span className={`step-dot ${done ? 'done' : on ? 'on' : ''}`}>{done ? <Icon name="check" size={13} /> : null}</span>
+              <span style={{ fontSize: 14 }}>{text}{done && st.count != null ? <span className="sub"> · {st.count} found</span> : ''}</span>
+            </div>
+          );
+        })}
+      </div>
+
+      <div>
+        <div className="sub" style={{ fontSize: 12, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase', marginBottom: 8 }}>
+          {real.length ? `Reading ${real.length} source${real.length > 1 ? 's' : ''}` : 'Looking across'}
+        </div>
+        <div className="row wrap" style={{ gap: 8 }}>
+          {logos.map((s, i) => (
+            <span key={s.domain} className="source-chip pop" style={{ animationDelay: `${i * 90}ms` }} title={s.label}>
+              <img src={favicon(s.domain)} alt="" width="18" height="18" loading="lazy" />
+              <span>{s.label}</span>
+            </span>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SourcesStrip({ sources }) {
+  const [open, setOpen] = useState(false);
+  const shown = open ? sources : sources.slice(0, 6);
+  return (
+    <div className="card" style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div className="row" style={{ justifyContent: 'space-between' }}>
+        <b style={{ fontSize: 14 }}>Pulled from {sources.length} source{sources.length > 1 ? 's' : ''}</b>
+        {sources.length > 6 && <button className="linkish" style={{ fontSize: 13 }} onClick={() => setOpen(!open)}>{open ? 'Show less' : 'Show all'}</button>}
+      </div>
+      <div className="row wrap" style={{ gap: 8 }}>
+        {shown.map((s) => (
+          <a key={s.domain} href={s.url} target="_blank" rel="noreferrer" className="source-chip" title={s.title || s.domain}>
+            <img src={favicon(s.domain)} alt="" width="18" height="18" loading="lazy" />
+            <span>{s.domain}</span>
+          </a>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function PickCard({ it, cat, area, active, setRef, onClick }) {
+  const saveType = cat === 'sight' || cat === 'busy' || cat === 'quiet' ? 'sight' : cat === 'stay' ? 'stay' : cat === 'couple' ? 'couple' : cat === 'cafe' ? 'cafe' : 'food';
+  return (
+    <div ref={setRef} className="card" onClick={onClick}
+      style={{ display: 'flex', gap: 12, alignItems: 'flex-start', cursor: 'pointer', outline: active ? '2px solid var(--ink)' : 'none', background: it.trusted ? 'var(--paper)' : '#FBF8F3' }}>
+      <span style={{ position: 'relative', width: 34, height: 34, borderRadius: 17, flexShrink: 0, background: it.trusted ? 'var(--accent)' : 'var(--paper)', color: it.trusted ? 'var(--paper)' : 'var(--ink)', border: it.trusted ? 'none' : '1.5px solid var(--ink)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 14 }}>
+        {it.n}
+      </span>
+      <div className="grow" style={{ display: 'flex', flexDirection: 'column', gap: 5, minWidth: 0 }}>
+        <div className="row wrap" style={{ gap: 8 }}>
+          <b style={{ fontSize: 16 }}>{it.name}</b>
+          {it.trusted
+            ? <span className="tag" style={{ background: '#F6E6B8', color: '#5C4510' }}>★ Trusted</span>
+            : <span className="tag" style={{ background: 'transparent', border: '1px dashed var(--line)', color: 'var(--muted)' }}>Less known</span>}
+        </div>
+        {it.why && <div style={{ fontSize: 14, lineHeight: 1.45, color: 'var(--muted)' }}>{it.why}</div>}
+        <div className="row wrap" style={{ gap: 6, marginTop: 2 }}>
+          {it.bestTime && <span className="tag" style={{ background: 'var(--teal-soft)', color: 'var(--teal)' }}><Icon name="clock" size={12} />{it.bestTime}</span>}
+          {(it.tags || []).map((t) => <span key={t} className="tag" style={{ background: 'var(--cream)', border: '1px solid var(--line)' }}>{t}</span>)}
+          {it.dist != null && <span className="sub" style={{ fontSize: 12 }}>{it.dist.toFixed(1)} km</span>}
+        </div>
+        {(it.sources?.length > 0 || it.inOsm) && (
+          <div className="row wrap" style={{ gap: 6, fontSize: 12, color: 'var(--muted)' }}>
+            <span>Found on</span>
+            {it.sources?.map((d) => <img key={d} src={favicon(d)} alt={d} title={d} width="16" height="16" style={{ borderRadius: 4 }} loading="lazy" />)}
+            {it.inOsm && <img src={favicon('openstreetmap.org')} alt="OpenStreetMap" title="OpenStreetMap" width="16" height="16" style={{ borderRadius: 4 }} loading="lazy" />}
+            <span>{[...(it.sources || []), it.inOsm ? 'openstreetmap.org' : null].filter(Boolean).slice(0, 2).join(', ')}{(it.sources?.length || 0) + (it.inOsm ? 1 : 0) > 2 ? ` +${(it.sources?.length || 0) + (it.inOsm ? 1 : 0) - 2}` : ''}</span>
+          </div>
+        )}
+      </div>
+      <div className="row" style={{ gap: 6 }} onClick={(e) => e.stopPropagation()}>
+        <a className="icon-btn" style={{ width: 40, height: 40 }} href={mapsLink(it)} target="_blank" rel="noreferrer" aria-label={`Directions to ${it.name}`}><Icon name="route" size={18} /></a>
+        <SaveButton item={{ type: saveType, name: it.name, lat: it.lat, lon: it.lon, city: area, note: it.why }} size={40} />
+      </div>
+    </div>
+  );
+}
+
+function TrustNote() {
+  return (
+    <details className="card" style={{ fontSize: 13, lineHeight: 1.55, color: 'var(--muted)' }}>
+      <summary style={{ cursor: 'pointer', fontWeight: 700, color: 'var(--ink)' }}>How do we decide what's ★ Trusted?</summary>
+      <div style={{ marginTop: 8 }}>
+        A place is <b>Trusted</b> when several independent sources back it up: mentions across blogs, review and travel sites or Instagram found through Google, plus being a known, listed place on OpenStreetMap. <b>Less known</b> places have only one source so far. They can still be great hidden gems, just double-check before you go.
+      </div>
+    </details>
+  );
+}
+
+// Google requires showing its search suggestions with web-grounded results
+function SearchSuggestions({ html }) {
+  return (
+    <iframe title="Related Google searches" srcDoc={html} sandbox="allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation"
+      style={{ width: '100%', height: 64, border: 'none', borderRadius: 14, background: 'transparent' }} />
+  );
+}
+
+function LocationPicker({ current, onPick, onLocate, locating }) {
   const [q, setQ] = useState('');
   const [results, setResults] = useState([]);
-  const [busy, setBusy] = useState(false);
   const t = useRef();
   useEffect(() => {
     clearTimeout(t.current);
@@ -230,20 +397,12 @@ function LocationPicker({ current, onPick }) {
     t.current = setTimeout(async () => { try { setResults(await searchPlaces(q)); } catch { setResults([]); } }, 350);
     return () => clearTimeout(t.current);
   }, [q]);
-  const nearMe = async () => {
-    setBusy(true);
-    try {
-      const { lat, lon } = await getMyLocation();
-      const where = await reverseGeocode(lat, lon);
-      onPick({ lat, lon, name: where.name });
-    } catch { alert('Location is off. Search a city instead.'); } finally { setBusy(false); }
-  };
   return (
     <div style={{ position: 'relative' }}>
       <form className="search" onSubmit={(e) => { e.preventDefault(); if (results[0]) { onPick(results[0]); setQ(''); setResults([]); } }}>
         <Icon name="pin" size={18} />
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={current ? `Searching around ${current}. Change city…` : 'Search a city or area, e.g. Lucknow'} aria-label="City or area" />
-        <button type="button" className="icon-btn" style={{ border: 'none', background: 'var(--ink)', color: 'var(--paper)' }} onClick={nearMe} aria-label="Use my location" disabled={busy}><Icon name="locate" size={18} /></button>
+        <button type="button" className="icon-btn" style={{ border: 'none', background: 'var(--ink)', color: 'var(--paper)' }} onClick={onLocate} aria-label="Use my location" disabled={locating}><Icon name="locate" size={18} /></button>
       </form>
       {results.length > 0 && (
         <div className="card" style={{ position: 'absolute', left: 0, right: 0, top: 62, zIndex: 600, padding: 6, boxShadow: '0 12px 30px rgba(43,36,32,.15)' }}>

@@ -224,7 +224,7 @@ function AIPicks({ cat, lat, lon, name }) {
       <div className="row wrap" style={{ justifyContent: 'space-between' }}>
         <div>
           <div className="row" style={{ gap: 8 }}><span className="tag" style={{ background: 'var(--accent)', color: 'var(--paper)' }}>AI picks</span><b style={{ fontSize: 18 }}>Best {DISCOVER_CATS[cat].label.toLowerCase()}</b></div>
-          {d?.status === 'ok' && <div style={{ fontSize: 12, opacity: .7, marginTop: 4 }}>Shared by Wanderpin travellers · {ageLabel(d.updatedAt)}</div>}
+          {d?.status === 'ok' && <div style={{ fontSize: 12, opacity: .7, marginTop: 4 }}>{d.sources?.length ? `From ${d.sources.length} web sources` : 'Shared by Wanderpin travellers'} · {ageLabel(d.updatedAt)}</div>}
         </div>
         <Link to={url} className="btn accent" style={{ height: 38, textDecoration: 'none' }}><Icon name="map" size={16} />Open map</Link>
       </div>
@@ -232,7 +232,7 @@ function AIPicks({ cat, lat, lon, name }) {
       {d?.status === 'ok' && (
         <ol style={{ margin: 0, paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 8 }}>
           {d.items.slice(0, 5).map((it) => (
-            <li key={it.id} style={{ fontSize: 14, lineHeight: 1.45 }}><b>{it.name}</b>{it.why ? <span style={{ opacity: .75 }}> · {it.why}</span> : null}</li>
+            <li key={it.id} style={{ fontSize: 14, lineHeight: 1.45 }}><b>{it.name}</b>{it.trusted ? <span style={{ color: '#E9C46A' }}> ★</span> : null}{it.why ? <span style={{ opacity: .75 }}> · {it.why}</span> : null}</li>
           ))}
         </ol>
       )}

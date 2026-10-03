@@ -2,6 +2,7 @@
 
 // Results are shared per grid cell of CELL degrees (~22 km north–south).
 export const CELL = 0.2;
+export const DISCOVER_VERSION = 2; // bump to regenerate all saved picks
 export const FRESH_DAYS = 30;     // after this, picks are regenerated on the next search
 export const REFRESH_DAYS = 7;    // users may ask for a refresh once picks are this old
 
