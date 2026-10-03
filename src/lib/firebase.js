@@ -2,11 +2,13 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, signOut, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 
+// Firebase web config is public by design (it ships in the app); the Firestore rules protect the data.
+// Env vars override these defaults if set.
 const config = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || 'AIzaSyBKGjgjRvX7wxFsHUoxbhS6F7SSOvtz3wI',
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || 'wanderpin-ac2b4.firebaseapp.com',
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || 'wanderpin-ac2b4',
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || '1:642030776109:web:a8e1abeb0938f20b06ada4'
 };
 
 // The app still works without Firebase: everything is saved on the device.
