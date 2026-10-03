@@ -320,3 +320,9 @@ a.source-chip:hover { background: var(--paper); }
 .source-chip.pop { animation: chipIn .4s ease both, chipPulse 2.2s ease-in-out infinite .4s; }
 @keyframes chipIn { from { opacity: 0; transform: translateY(6px) scale(.95); } to { opacity: 1; transform: none; } }
 @keyframes chipPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(181,105,74,0); } 50% { box-shadow: 0 0 0 4px rgba(181,105,74,.12); } }
+.map-gmaps { position: absolute; right: 12px; top: 12px; z-index: 500; display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px;
+  border-radius: 17px; background: var(--paper); color: var(--ink); font-size: 12px; font-weight: 700; text-decoration: none; box-shadow: 0 4px 12px rgba(43,36,32,.18); }
+.seg { display: grid; grid-template-columns: 1fr 1fr; background: var(--paper); border: 1px solid var(--line); border-radius: 22px; padding: 4px; gap: 4px; }
+.seg button { height: 38px; border: none; border-radius: 18px; background: transparent; font-weight: 700; font-size: 14px; color: var(--muted); }
+.seg button.on { background: var(--ink); color: var(--paper); }
+@media (max-width: 899px) { .map-popup { top: 56px; } }

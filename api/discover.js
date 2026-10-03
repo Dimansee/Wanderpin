@@ -12,7 +12,7 @@
 
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
-import { DISCOVER_CATS, DISCOVER_VERSION, FRESH_DAYS, REFRESH_DAYS, cellOf, discoverKey } from '../src/lib/discoverConfig.js';
+import { DISCOVER_CATS, DISCOVER_VERSION, FRESH_DAYS, REFRESH_DAYS, cellOf, discoverKey, osmQuery } from '../src/lib/discoverConfig.js';
 
 const UA = 'Wanderpin/1.0 (https://wanderpin-lovat.vercel.app)';
 const DAY = 86400000;
@@ -49,18 +49,7 @@ async function fetchJSON(url, opts = {}, ms = 20000) {
 /* ---------------- OpenStreetMap ---------------- */
 
 function overpassQuery(cat, lat, lon, r) {
-  const A = `(around:${r},${lat},${lon})`;
-  const parts = {
-    food: [`nwr${A}[amenity~"^(fast_food|food_court|ice_cream|restaurant)$"][name]`, `nwr${A}[shop~"^(confectionery|pastry|bakery|deli)$"][name]`],
-    cafe: [`nwr${A}[amenity=cafe][name]`],
-    couple: [`nwr${A}[tourism=viewpoint]`, `nwr${A}[leisure~"^(park|garden)$"][name]`, `nwr${A}[natural~"^(beach|water)$"][name]`, `nwr${A}[tourism=attraction][name]`],
-    sight: [`nwr${A}[tourism~"^(attraction|museum|gallery|zoo|theme_park)$"][name]`, `nwr${A}[historic~"^(monument|castle|fort|palace|memorial|ruins|archaeological_site|city_gate)$"][name]`, `nwr${A}[amenity=place_of_worship][name][wikidata]`],
-    family: [`nwr${A}[amenity=restaurant][name]`],
-    busy: [`nwr${A}[amenity=marketplace][name]`, `nwr${A}[shop=mall][name]`, `nwr${A}[tourism=attraction][name][wikidata]`, `nwr${A}[place=square][name]`],
-    quiet: [`nwr${A}[leisure~"^(park|garden|nature_reserve)$"][name]`, `nwr${A}[tourism=viewpoint]`, `nwr${A}[natural~"^(water|wood)$"][name]`],
-    stay: [`nwr${A}[tourism~"^(hotel|guest_house|hostel|resort)$"][name]`]
-  }[cat];
-  return `[out:json][timeout:25];(${parts.join(';')};);out center tags 400;`;
+  return osmQuery(cat, `(around:${r},${lat},${lon})`);
 }
 
 async function osmCandidates(cat, lat, lon) {
@@ -113,6 +102,24 @@ async function areaName(lat, lon) {
   } catch { return 'this area'; }
 }
 
+const distKm = (a, b) => {
+  const R = 6371, dA = ((b.lat - a.lat) * Math.PI) / 180, dO = ((b.lon - a.lon) * Math.PI) / 180;
+  const x = Math.sin(dA / 2) ** 2 + Math.cos((a.lat * Math.PI) / 180) * Math.cos((b.lat * Math.PI) / 180) * Math.sin(dO / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(x));
+};
+
+// Photon (OpenStreetMap search by Komoot): fast, biased to the area
+async function locatePhoton(name, center) {
+  try {
+    const r = await fetchJSON(`https://photon.komoot.io/api/?q=${encodeURIComponent(name)}&lat=${center.lat}&lon=${center.lon}&limit=3`, {}, 7000);
+    for (const f of r.features || []) {
+      const [lon, lat] = f.geometry?.coordinates || [];
+      if (Number.isFinite(lat) && distKm(center, { lat, lon }) < 25) return { lat, lon };
+    }
+  } catch { /* ignore */ }
+  return null;
+}
+
 async function locate(name, area, center) {
   const d = 0.3;
   const vb = `${center.lon - d},${center.lat + d},${center.lon + d},${center.lat - d}`;
@@ -142,7 +149,7 @@ function buildPrompt(cat, area, candidates, grounded) {
   return `You are a local travel expert for ${area}.
 A traveller wants: ${DISCOVER_CATS[cat].ai}.
 ${grounded ? `Search the web for what travellers, food and travel bloggers, Instagram creators, review sites and local guides recommend in ${area} right now.` : ''}
-Pick the 12 to 18 best real places in or very near ${area} for this request, best first.
+Pick the 18 to 25 best real places in or very near ${area} for this request, best first.
 For reference, places listed on OpenStreetMap near ${area}: ${list || '(none)'}.
 Prefer the exact names people use. Never invent places. Skip big chains unless they are iconic locally.
 
@@ -208,21 +215,24 @@ async function generate(cat, center, place, send) {
   send({ type: 'step', id: 'verify', status: 'start' });
   let items = [];
   if (picks?.length) {
-    let lookups = 0;
-    for (const p of picks.slice(0, 18)) {
-      if (!p?.name) continue;
+    const list = picks.filter((p) => p?.name).slice(0, 25).map((p) => ({ p, osm: matchOsm(p.name, candidates) }));
+    // Place the ones OSM didn't match: Photon in parallel, then a few Nominatim tries
+    await Promise.all(list.filter((x) => !x.osm).map(async (x) => { x.pos = await locatePhoton(x.p.name, center); }));
+    let tries = 0;
+    for (const x of list) {
+      if (x.osm || x.pos || tries >= 5) continue;
+      tries++; await sleep(1100);
+      x.pos = await locate(x.p.name, area, center);
+    }
+    for (const { p, osm, pos: found } of list) {
       // Which web sources back this place?
       const n = norm(p.name);
       const key = n.split(' ').slice(0, 3).join(' ');
       const chunkIdx = new Set();
       for (const s of grounding.supports) if (s.text.includes(key)) s.idx.forEach((i) => chunkIdx.add(i));
       const domains = [...new Set([...chunkIdx].map((i) => grounding.sources[i]?.domain).filter(Boolean))];
-
-      const osm = matchOsm(p.name, candidates);
-      let pos = osm ? { lat: osm.lat, lon: osm.lon } : null;
-      if (!pos && lookups < 8) { lookups++; await sleep(1100); pos = await locate(p.name, area, center); }
+      const pos = osm ? { lat: osm.lat, lon: osm.lon } : found;
       if (!pos) continue; // can't place it on the map, so don't show it
-
       const score = (osm ? 1 : 0) + (osm?.famous ? 2 : 0) + Math.min(domains.length, 3);
       items.push({
         name: p.name, lat: pos.lat, lon: pos.lon,

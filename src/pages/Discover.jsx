@@ -1,13 +1,13 @@
 import { Component, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
-import { MapContainer, TileLayer, Marker, Circle, CircleMarker, useMap, useMapEvents } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Circle, CircleMarker, Popup, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { TopBar, SaveButton } from '../components/bits.jsx';
 import Icon from '../components/Icon.jsx';
 import Globe from '../components/Globe.jsx';
 import { ReportSheet } from './Place.jsx';
-import { getDiscover, DISCOVER_CATS, REFRESH_DAYS, cellOf, ageLabel, favicon } from '../lib/discover.js';
+import { getDiscover, DISCOVER_CATS, REFRESH_DAYS, cellOf, ageLabel, favicon, getAreaPlaces, googleMapsSearch } from '../lib/discover.js';
 import { searchPlaces, getMyLocation, reverseGeocode, mapsLink, distanceKm } from '../lib/api.js';
 import { useIsDesktop } from '../lib/useMedia.js';
 
@@ -58,8 +58,13 @@ function Recenter({ center }) {
   return null;
 }
 
-function WatchMove({ onMove }) {
-  useMapEvents({ moveend: (e) => { const c = e.target.getCenter(); onMove({ lat: c.lat, lon: c.lng }); } });
+// dragend = the user moved the map by hand (not our own fly-to); moveend = any change of view
+function WatchMap({ onDrag, onView }) {
+  const map = useMapEvents({
+    dragend: (e) => { const c = e.target.getCenter(); onDrag({ lat: c.lat, lon: c.lng }); },
+    moveend: (e) => { const m = e.target; const b = m.getBounds(); onView({ s: b.getSouth(), w: b.getWest(), n: b.getNorth(), e: b.getEast(), zoom: m.getZoom(), lat: m.getCenter().lat, lon: m.getCenter().lng }); }
+  });
+  useEffect(() => { const b = map.getBounds(); onView({ s: b.getSouth(), w: b.getWest(), n: b.getNorth(), e: b.getEast(), zoom: map.getZoom(), lat: map.getCenter().lat, lon: map.getCenter().lng }); }, []); // eslint-disable-line
   return null;
 }
 
@@ -73,8 +78,11 @@ export default function Discover() {
 
   const [state, setState] = useState({ status: lat == null ? 'need_place' : 'loading' });
   const [progress, setProgress] = useState({ steps: {}, sources: [] });
-  const [mapCenter, setMapCenter] = useState(null);
+  const [mapCenter, setMapCenter] = useState(null); // last place the user dragged the map to
   const [popupHidden, setPopupHidden] = useState(false);
+  const [view, setView] = useState(null);           // visible map box
+  const [nearby, setNearby] = useState({ status: 'idle', items: [] });
+  const [listTab, setListTab] = useState('picks');
   const [active, setActive] = useState(null);
   const [me, setMe] = useState(null);
   const [locating, setLocating] = useState(false);
@@ -94,6 +102,7 @@ export default function Discover() {
     setProgress({ steps: {}, sources: [] });
     setActive(null);
     setPopupHidden(false);
+    setMapCenter(null);
     const onEvent = (ev) => setProgress((p) => {
       if (ev.type === 'step') return { ...p, steps: { ...p.steps, [ev.id]: ev } };
       if (ev.type === 'sources') return { ...p, sources: ev.sources || [] };
@@ -107,6 +116,21 @@ export default function Discover() {
   };
 
   useEffect(() => { load(); }, [cat, lat, lon]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // "More nearby": all matching places in the visible part of the map
+  useEffect(() => {
+    if (!view) return;
+    if (view.zoom < 12) { setNearby({ status: 'zoom', items: [] }); return; }
+    let alive = true;
+    const t = setTimeout(async () => {
+      setNearby((n) => ({ ...n, status: 'loading' }));
+      try {
+        const items = await getAreaPlaces(cat, view);
+        if (alive) setNearby({ status: 'ok', items });
+      } catch (e) { if (alive) setNearby({ status: 'error', items: [], message: e.message }); }
+    }, 700);
+    return () => { alive = false; clearTimeout(t); };
+  }, [view?.s, view?.w, view?.n, view?.e, view?.zoom, cat]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const locateMe = async () => {
     setLocating(true);
@@ -132,6 +156,10 @@ export default function Discover() {
   const numbered = useMemo(() => items.map((it, i) => ({ ...it, n: i + 1, dist: center ? distanceKm(center.lat, center.lon, it.lat, it.lon) : null })), [items]); // eslint-disable-line
   const trustedCount = numbered.filter((i) => i.trusted).length;
   const shown = onlyTrusted ? numbered.filter((i) => i.trusted) : numbered;
+  const pickNames = new Set(numbered.map((i) => i.name.toLowerCase()));
+  const more = (nearby.items || []).filter((p) => !pickNames.has(p.name.toLowerCase()))
+    .map((p) => ({ ...p, dist: view ? distanceKm(view.lat, view.lon, p.lat, p.lon) : null }))
+    .sort((a, b) => (b.famous - a.famous) || (a.dist - b.dist));
 
   const focus = (it) => {
     setActive(it);
@@ -176,12 +204,24 @@ export default function Discover() {
                 <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                   url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
                 <Recenter center={center} />
-                <WatchMove onMove={(c) => { setMapCenter(c); setPopupHidden(false); }} />
+                <WatchMap onDrag={(c) => { setMapCenter(c); setPopupHidden(false); }} onView={setView} />
                 <FlyTo target={active} />
                 <FlyTo target={me} zoom={13} />
                 <Circle center={[cellOf(lat, lon).center.lat, cellOf(lat, lon).center.lon]} radius={11000}
                   pathOptions={{ color: '#B5694A', weight: 1, fillOpacity: 0.04, dashArray: '4 6' }} />
                 {me && <CircleMarker center={[me.lat, me.lon]} radius={8} pathOptions={{ color: '#FFFDF9', weight: 3, fillColor: '#2F6FEB', fillOpacity: 1 }} />}
+                {more.map((p) => (
+                  <CircleMarker key={p.id} center={[p.lat, p.lon]} radius={5}
+                    pathOptions={{ color: '#FFFDF9', weight: 1.5, fillColor: '#6B5E52', fillOpacity: .85 }}>
+                    <Popup>
+                      <div style={{ fontFamily: 'var(--sans)', minWidth: 160 }}>
+                        <b style={{ fontSize: 14 }}>{p.name}</b>
+                        <div style={{ fontSize: 12, color: '#6B5E52', margin: '2px 0 8px' }}>{[p.kind, p.cuisine].filter(Boolean).join(' · ')}</div>
+                        <a href={mapsLink(p)} target="_blank" rel="noreferrer" style={{ fontSize: 13, fontWeight: 700 }}>Directions</a>
+                      </div>
+                    </Popup>
+                  </CircleMarker>
+                ))}
                 {shown.map((it) => (
                   <Marker key={it.id} position={[it.lat, it.lon]} icon={pin(it.n, active?.id === it.id, it.trusted)}
                     eventHandlers={{ click: () => focus(it) }} title={it.name} zIndexOffset={it.trusted ? 100 : 0} />
@@ -203,7 +243,13 @@ export default function Discover() {
             <div className="map-legend">
               <span><b style={{ color: '#E9C46A' }}>★</b> Trusted</span>
               <span><i style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 5, border: '1.5px solid var(--ink)', background: 'var(--paper)' }} /> Less known</span>
+              <span><i style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 4, background: '#6B5E52' }} /> More nearby</span>
             </div>
+            {view && (
+              <a className="map-gmaps" href={googleMapsSearch(cat, view.lat, view.lon, Math.round(view.zoom))} target="_blank" rel="noreferrer">
+                <img src={favicon('maps.google.com')} alt="" width="16" height="16" />See more on Google Maps
+              </a>
+            )}
           </div>
 
           <div className="discover-list">
@@ -224,6 +270,14 @@ export default function Discover() {
 
                 {state.sources?.length > 0 && <SourcesStrip sources={state.sources} />}
 
+                <div className="seg" role="tablist">
+                  <button role="tab" aria-selected={listTab === 'picks'} className={listTab === 'picks' ? 'on' : ''} onClick={() => setListTab('picks')}>AI picks · {numbered.length}</button>
+                  <button role="tab" aria-selected={listTab === 'nearby'} className={listTab === 'nearby' ? 'on' : ''} onClick={() => setListTab('nearby')}>
+                    More nearby · {nearby.status === 'loading' ? '…' : more.length}
+                  </button>
+                </div>
+
+                {listTab === 'nearby' ? <NearbyList state={nearby} items={more} cat={cat} area={area} gmaps={view ? googleMapsSearch(cat, view.lat, view.lon, Math.round(view.zoom)) : null} /> : <>
                 <div className="row wrap" style={{ gap: 8 }}>
                   <button className={`chip ${!onlyTrusted ? 'on' : ''}`} onClick={() => setOnlyTrusted(false)}>All {numbered.length}</button>
                   <button className={`chip row ${onlyTrusted ? 'on' : ''}`} style={{ gap: 6 }} onClick={() => setOnlyTrusted(true)} disabled={!trustedCount}>
@@ -237,6 +291,7 @@ export default function Discover() {
                 </div>
 
                 <TrustNote />
+                </>}
                 {state.entryPoint && <SearchSuggestions html={state.entryPoint} />}
                 <div className="sub" style={{ fontSize: 12, lineHeight: 1.6 }}>
                   Shared with every Wanderpin traveller searching this area and refreshed monthly. Always check opening hours before you go.
@@ -365,6 +420,32 @@ function PickCard({ it, cat, area, active, setRef, onClick }) {
         <SaveButton item={{ type: saveType, name: it.name, lat: it.lat, lon: it.lon, city: area, note: it.why }} size={40} />
       </div>
     </div>
+  );
+}
+
+function NearbyList({ state, items, cat, area, gmaps }) {
+  const saveType = cat === 'sight' || cat === 'busy' || cat === 'quiet' ? 'sight' : cat === 'stay' ? 'stay' : cat === 'couple' ? 'couple' : cat === 'cafe' ? 'cafe' : 'food';
+  if (state.status === 'zoom') return <div className="empty card">Zoom in on the map to see every place in that area.</div>;
+  if (state.status === 'loading' && !items.length) return <div className="card sub">Loading every place in view…</div>;
+  if (state.status === 'error') return <div className="alert">{state.message}</div>;
+  return (
+    <>
+      <div className="sub" style={{ fontSize: 13 }}>Every matching place in the visible map area, from OpenStreetMap. Move or zoom the map to update.</div>
+      {!items.length && <div className="empty card">No other places in view.</div>}
+      <div className="list single">
+        {items.slice(0, 150).map((p) => (
+          <div key={p.id} className="card item">
+            <div className="grow">
+              <div className="title" style={{ fontSize: 15 }}>{p.name}{p.famous ? <span className="tag" style={{ marginLeft: 8, background: 'var(--sand-soft)' }}>Well known</span> : null}</div>
+              <div className="meta">{[p.cuisine || p.kind, p.dist != null ? `${p.dist.toFixed(1)} km` : null].filter(Boolean).join(' · ')}</div>
+            </div>
+            <a className="icon-btn" style={{ width: 40, height: 40 }} href={mapsLink(p)} target="_blank" rel="noreferrer" aria-label={`Directions to ${p.name}`}><Icon name="route" size={18} /></a>
+            <SaveButton item={{ type: saveType, name: p.name, lat: p.lat, lon: p.lon, city: area, note: p.cuisine || p.kind }} size={40} />
+          </div>
+        ))}
+      </div>
+      {gmaps && <a className="btn ghost" href={gmaps} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}><img src={favicon('maps.google.com')} alt="" width="18" height="18" />Still missing a place? Open this area on Google Maps</a>}
+    </>
   );
 }
 

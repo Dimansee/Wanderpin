@@ -80,3 +80,44 @@ export function ageLabel(ts) {
   if (days === 1) return 'updated yesterday';
   return `updated ${days} days ago`;
 }
+
+/* ---------- "More nearby": every matching OpenStreetMap place in the visible map area ---------- */
+import { osmQuery } from './discoverConfig.js';
+const boxCache = new Map();
+const OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter'];
+
+export async function getAreaPlaces(cat, b) {
+  // round the box so small pans reuse results
+  const r = (v) => Math.round(v * 50) / 50;
+  const box = `(${r(b.s)},${r(b.w)},${r(b.n)},${r(b.e)})`;
+  const key = `${cat}${box}`;
+  if (boxCache.has(key)) return boxCache.get(key);
+  const q = osmQuery(cat, box, 300);
+  for (const url of OVERPASS) {
+    try {
+      const res = await fetch(url, { method: 'POST', body: 'data=' + encodeURIComponent(q), headers: { 'Content-Type': 'application/x-www-form-urlencoded' } });
+      if (!res.ok) continue;
+      const d = await res.json();
+      const seen = new Set();
+      const out = [];
+      for (const el of d.elements || []) {
+        const t = el.tags || {};
+        const name = t['name:en'] || t.name;
+        const lat = el.lat ?? el.center?.lat, lon = el.lon ?? el.center?.lon;
+        if (!name || !Number.isFinite(lat) || seen.has(name.toLowerCase())) continue;
+        seen.add(name.toLowerCase());
+        out.push({
+          id: `osm-${el.type}-${el.id}`, name, lat, lon,
+          kind: (t.amenity || t.tourism || t.historic || t.leisure || t.shop || t.natural || '').replace(/_/g, ' '),
+          cuisine: t.cuisine?.replace(/;/g, ', ').replace(/_/g, ' '), hours: t.opening_hours, famous: !!(t.wikidata || t.wikipedia)
+        });
+      }
+      boxCache.set(key, out);
+      return out;
+    } catch { /* next mirror */ }
+  }
+  throw new Error('Map places are busy, try again in a moment');
+}
+
+const GMAPS_QUERY = { food: 'street food', cafe: 'cafes', couple: 'romantic places', sight: 'tourist attractions', family: 'family restaurants', busy: 'markets', quiet: 'parks', stay: 'hotels' };
+export const googleMapsSearch = (cat, lat, lon, zoom = 14) => `https://www.google.com/maps/search/${encodeURIComponent(GMAPS_QUERY[cat] || cat)}/@${(+lat).toFixed(5)},${(+lon).toFixed(5)},${zoom}z`;
