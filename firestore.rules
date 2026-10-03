@@ -1,0 +1,29 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Each user's saves, trips and notes are private to them
+    match /users/{uid}/{collection}/{docId} {
+      allow read, write: if request.auth != null && request.auth.uid == uid
+        && collection in ['saves', 'trips', 'notes'];
+    }
+
+    // Anyone can report a reel/link the app couldn't read; only you read them (in the Firebase console)
+    match /reports/{id} {
+      allow create: if request.resource.data.keys().hasOnly(['type', 'url', 'caption', 'reason', 'message', 'uid', 'createdAt', 'destination'])
+        && request.resource.data.get('message', '').size() < 2000
+        && request.resource.data.get('caption', '').size() < 5000;
+      allow read, update, delete: if false;
+    }
+
+    // Live crowd check-ins: anonymous, small, readable by all
+    match /crowd/{id} {
+      allow read: if true;
+      allow create: if request.resource.data.keys().hasOnly(['placeKey', 'level', 'createdAt'])
+        && request.resource.data.level is int
+        && request.resource.data.level >= 0 && request.resource.data.level <= 3
+        && request.resource.data.placeKey is string && request.resource.data.placeKey.size() < 140;
+      allow update, delete: if false;
+    }
+  }
+}
