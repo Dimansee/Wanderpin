@@ -279,3 +279,15 @@ textarea.field { min-height: 110px; resize: vertical; }
   .plan-card { min-height: 210px; padding: 28px; }
   .tools-grid .card { min-height: 140px; }
 }
+
+.linkish { border: none; background: none; padding: 6px 0; color: var(--accent-ink); font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
+
+/* discover (AI picks + map) */
+.discover-layout { display: flex; flex-direction: column; gap: 18px; }
+.discover-map { position: relative; height: 320px; border-radius: 22px; overflow: hidden; border: 1px solid var(--line-soft); z-index: 0; }
+.discover-list { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.leaflet-container { font-family: var(--sans); background: #E8E2D6; }
+@media (min-width: 900px) {
+  .discover-layout { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); align-items: start; gap: 28px; }
+  .discover-map { position: sticky; top: 108px; height: calc(100vh - 140px); min-height: 480px; }
+}

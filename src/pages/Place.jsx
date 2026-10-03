@@ -6,6 +6,7 @@ import { TopBar, SaveButton, PinTile, PlaceRow, Sheet, Skeleton } from '../compo
 import { useLiveConditions } from '../lib/useLive.js';
 import { getGuide, getNearby, detectSceneKind, estimateCrowd, buildItinerary, CATEGORIES } from '../lib/api.js';
 import { useIsDesktop } from '../lib/useMedia.js';
+import { getDiscover, DISCOVER_CATS, ageLabel } from '../lib/discover.js';
 import { addItem, sendReport, sendCrowdReport, recentCrowd, saveKey, useToast } from '../lib/store.js';
 
 const TABS = [
@@ -158,6 +159,8 @@ export default function Place() {
         </section>
       )}
 
+      {DISCOVER_CATS[tab] && <AIPicks cat={tab} lat={lat} lon={lon} name={name} />}
+
       {tab === 'food' && (
         <section className="section">
           {guide?.dishes?.length > 0 && (
@@ -204,6 +207,37 @@ export default function Place() {
 
       <ReportSheet open={reportOpen} onClose={() => setReportOpen(false)} context={{ type: 'place', destination: name, url: window.location.href }} />
     </div>
+  );
+}
+
+function AIPicks({ cat, lat, lon, name }) {
+  const [d, setD] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    setD(null);
+    getDiscover(cat, lat, lon, { place: name }).then((r) => alive && setD(r)).catch(() => alive && setD({ status: 'error' }));
+    return () => { alive = false; };
+  }, [cat, lat, lon, name]);
+  const url = `/discover?cat=${cat}&name=${encodeURIComponent(name)}&lat=${lat}&lon=${lon}`;
+  return (
+    <section className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: 18, background: 'var(--ink)', color: 'var(--paper)', border: 'none' }}>
+      <div className="row wrap" style={{ justifyContent: 'space-between' }}>
+        <div>
+          <div className="row" style={{ gap: 8 }}><span className="tag" style={{ background: 'var(--accent)', color: 'var(--paper)' }}>AI picks</span><b style={{ fontSize: 18 }}>Best {DISCOVER_CATS[cat].label.toLowerCase()}</b></div>
+          {d?.status === 'ok' && <div style={{ fontSize: 12, opacity: .7, marginTop: 4 }}>Shared by Wanderpin travellers · {ageLabel(d.updatedAt)}</div>}
+        </div>
+        <Link to={url} className="btn accent" style={{ height: 38, textDecoration: 'none' }}><Icon name="map" size={16} />Open map</Link>
+      </div>
+      {!d && <div style={{ fontSize: 14, opacity: .8 }}>Finding the best spots… the first search for an area takes a few seconds.</div>}
+      {d?.status === 'ok' && (
+        <ol style={{ margin: 0, paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {d.items.slice(0, 5).map((it) => (
+            <li key={it.id} style={{ fontSize: 14, lineHeight: 1.45 }}><b>{it.name}</b>{it.why ? <span style={{ opacity: .75 }}> · {it.why}</span> : null}</li>
+          ))}
+        </ol>
+      )}
+      {d && d.status !== 'ok' && <div style={{ fontSize: 14, opacity: .8 }}>AI picks aren't available here right now. The full list below still works.</div>}
+    </section>
   );
 }
 

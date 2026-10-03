@@ -1,4 +1,8 @@
 {
+  "functions": {
+    "api/discover.js": { "maxDuration": 60 },
+    "api/reel.js": { "maxDuration": 30 }
+  },
   "rewrites": [
     { "source": "/((?!api/|assets/|.*\\..*).*)", "destination": "/index.html" }
   ]

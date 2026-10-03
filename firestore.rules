@@ -16,6 +16,12 @@ service cloud.firestore {
       allow read, update, delete: if false;
     }
 
+    // Shared AI picks per area: everyone can read, only the server (/api/discover) writes
+    match /discover/{id} {
+      allow read: if true;
+      allow write: if false;
+    }
+
     // Live crowd check-ins: anonymous, small, readable by all
     match /crowd/{id} {
       allow read: if true;

@@ -58,6 +58,20 @@ Without a key the app still tries a simple fallback (it picks up 📍/numbered l
 
 Note: Vercel's Hobby plan is for non-commercial use. If Wanderpin starts earning money, you'll need Pro, or you can move hosting to Cloudflare Pages/Netlify.
 
+## 4b. Shared AI picks (food trails, cafes, couple spots…)
+
+`/api/discover` builds AI picks for a category inside a ~20 km area and saves them in Firestore (`discover` collection), so everyone searching that area gets them instantly. Picks regenerate after 30 days.
+
+To let the server save them, add a Firebase service account to Vercel:
+1. Firebase console → Settings → **Project settings → Service accounts → Generate new private key** (downloads a JSON file).
+2. Vercel → wanderpin → Settings → Environment Variables → add `FIREBASE_SERVICE_ACCOUNT` and paste the **whole JSON file content** as the value. Redeploy.
+3. Paste the updated `firestore.rules` (it adds the public-read `discover` block).
+
+Without this, AI picks still work but aren't saved, so each search regenerates them.
+
+## Login options
+Google and email/password. Enable **Email/Password** in Firebase → Authentication → Sign-in method.
+
 ## 5. "App" phase, still free
 
 - **Installable app (now):** the site is a PWA. On Android, Chrome shows "Install app"; on iPhone, Safari → Share → Add to Home Screen. The Profile tab has an install button.

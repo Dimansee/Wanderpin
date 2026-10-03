@@ -67,7 +67,7 @@ export default function Home() {
     } catch { alert('Location is off. You can still search any place.'); }
   };
 
-  const moodUrl = (cat) => (loc ? `/place?name=${encodeURIComponent(loc.name)}&lat=${loc.lat}&lon=${loc.lon}&tab=${cat}` : `/find?tab=${cat}`);
+  const moodUrl = (cat) => (loc ? `/discover?cat=${cat}&name=${encodeURIComponent(loc.name)}&lat=${(+loc.lat).toFixed(4)}&lon=${(+loc.lon).toFixed(4)}` : `/discover?cat=${cat}`);
   const tip = TIPS[Math.floor(Date.now() / 86400000) % TIPS.length];
 
   return (
