@@ -2,10 +2,12 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import Scene from '../components/Scene.jsx';
 import Icon from '../components/Icon.jsx';
-import SearchBox from '../components/SearchBox.jsx';
+import SearchBox, { placeUrl } from '../components/SearchBox.jsx';
 import { GlobeSlot, TileArt } from '../components/bits.jsx';
 import { useLiveConditions } from '../lib/useLive.js';
-import { getMyLocation, reverseGeocode } from '../lib/api.js';
+import { getMyLocation, reverseGeocode, localTime } from '../lib/api.js';
+import { DESTINATIONS } from '../lib/destinations.js';
+import { timeOfDayFromHour } from '../components/Scene.jsx';
 import { useCollection } from '../lib/store.js';
 import { useIsDesktop } from '../lib/useMedia.js';
 
@@ -104,19 +106,26 @@ export default function Home() {
       <div className="page" style={{ paddingTop: desktop ? 72 : 52 }}>
         <section className="section">
           <h2 style={{ fontSize: 22 }}>Start planning</h2>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 10 }}>
-            <Link to="/find" className="card" style={{ textDecoration: 'none', display: 'flex', flexDirection: 'column', gap: 10, padding: '14px 12px' }}>
-              <span className="thumb" style={{ width: 40, height: 40, borderRadius: 12, background: 'var(--teal-soft)', color: 'var(--teal)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Icon name="search" size={20} /></span>
-              <b style={{ fontSize: 14, lineHeight: 1.25 }}>Explore a place</b>
-            </Link>
-            <Link to="/import" style={{ textDecoration: 'none', background: 'var(--ink)', color: 'var(--paper)', borderRadius: 20, display: 'flex', flexDirection: 'column', gap: 10, padding: '14px 12px' }}>
-              <span style={{ width: 40, height: 40, borderRadius: 12, background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Icon name="reel" size={20} /></span>
-              <b style={{ fontSize: 14, lineHeight: 1.25 }}>Plan from a reel</b>
-            </Link>
-            <Link to="/trips/new" className="card" style={{ textDecoration: 'none', display: 'flex', flexDirection: 'column', gap: 10, padding: '14px 12px' }}>
-              <span style={{ width: 40, height: 40, borderRadius: 12, background: 'var(--plum-soft)', color: 'var(--plum)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Icon name="pencil" size={20} /></span>
-              <b style={{ fontSize: 14, lineHeight: 1.25 }}>Build my own trip</b>
-            </Link>
+          <div className="plan-grid">
+            <PlanCard to="/find" icon="search" iconBg="var(--teal-soft)" iconFg="var(--teal)" title="Explore a place"
+              desc="Weather, itinerary, food, cafes, couple spots and scams for any city." />
+            <PlanCard to="/import" dark icon="reel" title="Plan from a reel"
+              desc="Paste an Instagram reel. We pull out every place and build your days." />
+            <PlanCard to="/trips/new" icon="pencil" iconBg="var(--plum-soft)" iconFg="var(--plum)" title="Build my own trip"
+              desc="A day-by-day planner with your saved spots, notes and timings." />
+          </div>
+        </section>
+
+        <section className="section">
+          <div className="section-head">
+            <div>
+              <h2 style={{ fontSize: 22 }}>Trending destinations</h2>
+              <div className="sub">Live scenes in each place's local time</div>
+            </div>
+            <Link to="/find" style={{ fontSize: 14, fontWeight: 500 }}>Search all</Link>
+          </div>
+          <div className="dest-grid">
+            {DESTINATIONS.map((d) => <DestCard key={d.name} d={d} />)}
           </div>
         </section>
 
@@ -131,6 +140,27 @@ export default function Home() {
           </div>
           <div className="row wrap">
             {MORE.map(([cat, label]) => <button key={cat} className="chip" onClick={() => nav(moodUrl(cat))}>{label}</button>)}
+          </div>
+        </section>
+
+        <section className="reel-strip">
+          <div className="reel-strip-head">
+            <span className="tag" style={{ background: 'var(--accent)', color: 'var(--paper)' }}>New</span>
+            <h2 style={{ fontSize: 26, color: 'var(--paper)' }}>From reel to real trip</h2>
+            <div style={{ fontSize: 14, opacity: .8, lineHeight: 1.5 }}>Saw an itinerary on Instagram? Don't screenshot it. Plan it.</div>
+            <Link to="/import" className="btn accent" style={{ textDecoration: 'none', alignSelf: 'flex-start', marginTop: 6 }}><Icon name="reel" size={18} />Try it now</Link>
+          </div>
+          <div className="reel-steps">
+            {[['link', 'Share or paste', 'Send any reel from Instagram, or paste its link.'],
+              ['search', 'We read it', 'Places, cafes, food and tips mentioned are picked out.'],
+              ['map', 'Your itinerary', 'Day-by-day plan you can edit, save and share.']].map(([ic, t, d], i) => (
+              <div key={t} className="reel-step">
+                <span className="reel-step-num">{i + 1}</span>
+                <Icon name={ic} />
+                <b style={{ fontSize: 15 }}>{t}</b>
+                <span style={{ fontSize: 13, opacity: .8, lineHeight: 1.45 }}>{d}</span>
+              </div>
+            ))}
           </div>
         </section>
 
@@ -160,8 +190,46 @@ export default function Home() {
           <div><b style={{ fontSize: 15 }}>Tip of the day</b><div style={{ fontSize: 14, lineHeight: 1.45, marginTop: 4 }}>{tip}</div></div>
         </div>
         </div>
+
+        <footer className="footer">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div style={{ fontFamily: 'var(--serif)', fontSize: 22, fontWeight: 700 }}>Wanderpin</div>
+            <div className="sub" style={{ fontSize: 13 }}>Plan smarter trips. Find the good spots. Skip the scams.</div>
+          </div>
+          <div className="row wrap" style={{ gap: 16, fontSize: 14 }}>
+            <Link to="/find">Explore</Link><Link to="/import">Reel to trip</Link><Link to="/trips">Trips</Link><Link to="/saved">Saved</Link><Link to="/packing">Packing list</Link>
+          </div>
+          <div className="sub" style={{ fontSize: 12 }}>Guides: Wikivoyage (CC BY-SA) · Places: © OpenStreetMap contributors · Weather: Open-Meteo</div>
+        </footer>
       </div>
     </div>
+  );
+}
+
+function PlanCard({ to, icon, iconBg, iconFg, title, desc, dark }) {
+  return (
+    <Link to={to} className={`plan-card ${dark ? 'dark' : ''}`}>
+      <span className="plan-icon" style={dark ? { background: 'var(--accent)', color: 'var(--paper)' } : { background: iconBg, color: iconFg }}><Icon name={icon} size={20} /></span>
+      <b className="plan-title">{title}</b>
+      <span className="plan-desc">{desc}</span>
+      <span className="plan-go"><Icon name="chevron" size={18} /></span>
+    </Link>
+  );
+}
+
+function DestCard({ d }) {
+  const { time, hour } = localTime(d.tz);
+  return (
+    <Link to={placeUrl(d)} className="dest-card">
+      <div style={{ position: 'relative', borderRadius: 18, overflow: 'hidden' }}>
+        <Scene kind={d.kind} timeOfDay={timeOfDayFromHour(hour)} height={150} />
+        <span className="tag" style={{ position: 'absolute', left: 10, top: 10 }}><Icon name="clock" size={13} />{time}</span>
+      </div>
+      <div style={{ padding: '10px 4px 2px' }}>
+        <b style={{ fontSize: 16 }}>{d.name}</b>
+        <div className="sub" style={{ fontSize: 13 }}>{d.tag}</div>
+      </div>
+    </Link>
   );
 }
 
@@ -185,9 +253,9 @@ function PinTileStatic({ cat, h }) {
 
 function Tool({ to, icon, color, title, sub }) {
   return (
-    <Link to={to} className="card" style={{ textDecoration: 'none', display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <Icon name={icon} style={{ color }} />
-      <div><div style={{ fontSize: 14, fontWeight: 700 }}>{title}</div><div style={{ fontSize: 12, color: 'var(--muted)' }}>{sub}</div></div>
+    <Link to={to} className="card" style={{ textDecoration: 'none', display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <span style={{ width: 40, height: 40, borderRadius: 12, background: `${color}1A`, color, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Icon name={icon} size={20} /></span>
+      <div><div style={{ fontSize: 15, fontWeight: 700 }}>{title}</div><div style={{ fontSize: 13, color: 'var(--muted)' }}>{sub}</div></div>
     </Link>
   );
 }

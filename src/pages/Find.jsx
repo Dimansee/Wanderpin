@@ -2,6 +2,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import SearchBox, { placeUrl } from '../components/SearchBox.jsx';
 import { TopBar } from '../components/bits.jsx';
 import Icon from '../components/Icon.jsx';
+import { DESTINATIONS } from '../lib/destinations.js';
 
 const HEADINGS = {
   scams: ['Scam alerts', 'Which city are you heading to?'],
@@ -16,16 +17,7 @@ const HEADINGS = {
   quiet: ['Skip the crowds', 'In which city?']
 };
 
-const POPULAR = [
-  { name: 'Jaipur', lat: 26.9124, lon: 75.7873, region: 'Rajasthan, India' },
-  { name: 'Goa', lat: 15.4909, lon: 73.8278, region: 'India' },
-  { name: 'Manali', lat: 32.2396, lon: 77.1887, region: 'Himachal Pradesh, India' },
-  { name: 'Udaipur', lat: 24.5854, lon: 73.7125, region: 'Rajasthan, India' },
-  { name: 'Rishikesh', lat: 30.0869, lon: 78.2676, region: 'Uttarakhand, India' },
-  { name: 'Varanasi', lat: 25.3176, lon: 82.9739, region: 'Uttar Pradesh, India' },
-  { name: 'Dubai', lat: 25.2048, lon: 55.2708, region: 'United Arab Emirates' },
-  { name: 'Bali', lat: -8.4095, lon: 115.1889, region: 'Indonesia' }
-];
+const POPULAR = DESTINATIONS;
 
 export default function Find() {
   const [params] = useSearchParams();

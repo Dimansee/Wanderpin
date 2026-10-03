@@ -173,6 +173,34 @@ textarea.field { min-height: 110px; resize: vertical; }
   *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; }
 }
 
+/* ---------- home blocks ---------- */
+.plan-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.plan-card { position: relative; text-decoration: none; background: var(--paper); border: 1px solid var(--line-soft); border-radius: 20px; padding: 14px 12px; display: flex; flex-direction: column; gap: 10px; color: var(--ink); transition: transform .2s ease, box-shadow .2s ease; }
+.plan-card.dark { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.plan-card:hover { transform: translateY(-2px); box-shadow: 0 12px 28px rgba(43,36,32,.12); }
+.plan-icon { width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; }
+.plan-title { font-size: 14px; line-height: 1.25; }
+.plan-desc { display: none; font-size: 14px; line-height: 1.5; opacity: .75; }
+.plan-go { display: none; position: absolute; right: 18px; top: 20px; opacity: .5; }
+
+.dest-grid { display: grid; grid-auto-flow: column; grid-auto-columns: 200px; gap: 12px; overflow-x: auto; margin: 0 -20px; padding: 0 20px 6px; scrollbar-width: none; scroll-snap-type: x mandatory; }
+.dest-grid::-webkit-scrollbar { display: none; }
+.dest-card { text-decoration: none; color: var(--ink); scroll-snap-align: start; transition: transform .2s ease; }
+.dest-card:hover { transform: translateY(-3px); }
+
+.reel-strip { background: var(--ink); color: var(--paper); border-radius: 28px; padding: 22px; display: flex; flex-direction: column; gap: 20px; }
+.reel-strip-head { display: flex; flex-direction: column; gap: 8px; }
+.reel-strip-head .tag { align-self: flex-start; }
+.reel-steps { display: grid; grid-template-columns: 1fr; gap: 10px; }
+.reel-step { position: relative; background: rgba(255,253,249,.07); border: 1px solid rgba(255,253,249,.12); border-radius: 18px; padding: 16px; display: flex; flex-direction: column; gap: 6px; }
+.reel-step-num { position: absolute; right: 14px; top: 10px; font-family: var(--serif); font-size: 30px; font-weight: 700; opacity: .25; }
+
+.footer { border-top: 1px solid var(--line); padding: 28px 0 8px; display: flex; flex-direction: column; gap: 14px; }
+.footer a { text-decoration: none; font-weight: 500; }
+.footer a:hover { text-decoration: underline; }
+
+.top-band { display: none; }
+
 /* ---------- responsive layout ---------- */
 .container { width: 100%; max-width: 1180px; margin: 0 auto; padding: 0 20px; position: relative; }
 .nav-label { display: none; }
@@ -210,6 +238,24 @@ textarea.field { min-height: 110px; resize: vertical; }
   .sheet-backdrop { align-items: center; }
   .sheet { border-radius: 28px; max-width: 520px; }
   .list { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+
+  .plan-grid { gap: 16px; }
+  .plan-card { padding: 24px; gap: 12px; min-height: 190px; border-radius: 24px; }
+  .plan-icon { width: 52px; height: 52px; border-radius: 16px; }
+  .plan-title { font-size: 20px; font-family: var(--serif); }
+  .plan-desc, .plan-go { display: block; }
+  .dest-grid { grid-auto-flow: row; grid-template-columns: repeat(4, minmax(0, 1fr)); overflow: visible; margin: 0; padding: 0; gap: 18px; }
+  .reel-strip { flex-direction: row; align-items: center; padding: 36px; gap: 36px; }
+  .reel-strip-head { flex: 0 0 300px; }
+  .reel-steps { flex: 1; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+  .reel-step { padding: 22px; min-height: 170px; }
+  .footer { flex-direction: row; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; }
+  .tools-grid .card { padding: 20px; min-height: 120px; }
+
+  /* cream header band behind the floating nav once the page scrolls */
+  .top-band { display: block; position: fixed; left: 0; right: 0; top: 0; height: 92px; z-index: 45; background: rgba(245,239,230,.92); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border-bottom: 1px solid var(--line-soft); opacity: 0; pointer-events: none; transition: opacity .25s ease; }
+  .top-band.on { opacity: 1; pointer-events: auto; }
+  .top-band-brand { position: absolute; left: max(20px, calc(50% - 570px)); top: 30px; font-family: var(--serif); font-size: 24px; font-weight: 700; text-decoration: none; color: var(--ink); }
 }
 
 @media (min-width: 1200px) {

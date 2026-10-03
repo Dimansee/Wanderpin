@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Routes, Route, useLocation } from 'react-router-dom';
+import { Routes, Route, useLocation, Link } from 'react-router-dom';
 import BottomNav from './components/BottomNav.jsx';
 import Loader from './components/Loader.jsx';
 import Home from './pages/Home.jsx';
@@ -25,6 +25,15 @@ export default function App() {
 
   useEffect(() => { window.scrollTo(0, 0); }, [pathname]);
 
+  // Desktop: cream header band behind the top nav (on Home only after scrolling past the hero)
+  const [band, setBand] = useState(false);
+  useEffect(() => {
+    const onScroll = () => setBand(pathname !== '/' || window.scrollY > 380);
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, [pathname]);
+
   const toast = useCallback((m) => {
     setToastMsg(m);
     clearTimeout(window.__wpToast);
@@ -46,6 +55,7 @@ export default function App() {
           <Route path="/profile" element={<Profile />} />
           <Route path="*" element={<Home />} />
         </Routes>
+        <div className={`top-band ${band ? 'on' : ''}`} aria-hidden={!band}><Link to="/" className="top-band-brand" tabIndex={band ? 0 : -1}>Wanderpin</Link></div>
         <BottomNav />
         {toastMsg && <div className="toast" role="status">{toastMsg}</div>}
       </div>
