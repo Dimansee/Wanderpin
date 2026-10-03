@@ -1,6 +1,7 @@
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from './firebase.js';
 import { discoverKey, FRESH_DAYS, DISCOVER_VERSION } from './discoverConfig.js';
+import { curatedFor } from './admin.js';
 
 export { DISCOVER_CATS, REFRESH_DAYS, cellOf, discoverKey } from './discoverConfig.js';
 
@@ -13,7 +14,19 @@ export const favicon = (domain) => `https://www.google.com/s2/favicons?domain=${
  * Reads the shared copy from Firestore when this area was already searched; otherwise calls
  * /api/discover, which streams progress. `onEvent` receives {type:'step'|'sources', ...} as they arrive.
  */
-export async function getDiscover(cat, lat, lon, { place, refresh, onEvent } = {}) {
+export async function getDiscover(cat, lat, lon, opts = {}) {
+  const [raw, curated] = await Promise.all([getDiscoverRaw(cat, lat, lon, opts), curatedFor(cat, lat, lon)]);
+  if (!curated.length) return raw;
+  const names = new Set(curated.map((c) => c.name.toLowerCase()));
+  const ai = (raw.status === 'ok' ? raw.items : []).filter((i) => !names.has(i.name.toLowerCase()));
+  return {
+    ...(raw.status === 'ok' ? raw : { area: opts.place || curated[0].city, updatedAt: Date.now() }),
+    status: 'ok',
+    items: [...curated, ...ai]
+  };
+}
+
+async function getDiscoverRaw(cat, lat, lon, { place, refresh, onEvent } = {}) {
   const key = discoverKey(cat, lat, lon);
   if (!refresh && memo.has(key)) return memo.get(key);
 

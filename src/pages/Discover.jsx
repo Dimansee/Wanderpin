@@ -396,11 +396,15 @@ function PickCard({ it, cat, area, active, setRef, onClick }) {
       <div className="grow" style={{ display: 'flex', flexDirection: 'column', gap: 5, minWidth: 0 }}>
         <div className="row wrap" style={{ gap: 8 }}>
           <b style={{ fontSize: 16 }}>{it.name}</b>
-          {it.trusted
+          {it.curated && <span className="tag" style={{ background: 'var(--teal)', color: 'var(--paper)' }}><Icon name="check" size={12} />Verified by Wanderpin</span>}
+          {it.price && <span className="tag" style={{ background: 'var(--cream)', border: '1px solid var(--line)' }}>{it.price}</span>}
+          {it.curated ? null : it.trusted
             ? <span className="tag" style={{ background: '#F6E6B8', color: '#5C4510' }}>★ Trusted</span>
             : <span className="tag" style={{ background: 'transparent', border: '1px dashed var(--line)', color: 'var(--muted)' }}>Less known</span>}
         </div>
+        {it.photo && <img src={it.photo} alt="" loading="lazy" style={{ width: '100%', maxHeight: 180, objectFit: 'cover', borderRadius: 14 }} />}
         {it.why && <div style={{ fontSize: 14, lineHeight: 1.45, color: 'var(--muted)' }}>{it.why}</div>}
+        {it.link && <a href={it.link} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} style={{ fontSize: 13, fontWeight: 700 }}>{/instagram\.com/.test(it.link) ? 'See on Instagram' : 'Visit link'}</a>}
         <div className="row wrap" style={{ gap: 6, marginTop: 2 }}>
           {it.bestTime && <span className="tag" style={{ background: 'var(--teal-soft)', color: 'var(--teal)' }}><Icon name="clock" size={12} />{it.bestTime}</span>}
           {(it.tags || []).map((t) => <span key={t} className="tag" style={{ background: 'var(--cream)', border: '1px solid var(--line)' }}>{t}</span>)}

@@ -11,6 +11,7 @@ import Import from './pages/Import.jsx';
 import Packing from './pages/Packing.jsx';
 import Profile from './pages/Profile.jsx';
 import Discover from './pages/Discover.jsx';
+import Admin from './pages/Admin.jsx';
 import { ToastContext } from './lib/store.js';
 
 export default function App() {
@@ -55,6 +56,7 @@ export default function App() {
           <Route path="/packing" element={<Packing />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/discover" element={<Discover />} />
+          <Route path="/admin" element={<Admin />} />
           <Route path="*" element={<Home />} />
         </Routes>
         <div className={`top-band ${band ? 'on' : ''}`} aria-hidden={!band}><Link to="/" className="top-band-brand" tabIndex={band ? 0 : -1}>Wanderpin</Link></div>

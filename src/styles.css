@@ -326,3 +326,13 @@ a.source-chip:hover { background: var(--paper); }
 .seg button { height: 38px; border: none; border-radius: 18px; background: transparent; font-weight: 700; font-size: 14px; color: var(--muted); }
 .seg button.on { background: var(--ink); color: var(--paper); }
 @media (max-width: 899px) { .map-popup { top: 56px; } }
+
+/* admin */
+.admin-grid { display: grid; grid-template-columns: 1fr; gap: 18px; }
+.admin-map { height: 340px; border-radius: 20px; overflow: hidden; border: 1px solid var(--line-soft); position: relative; z-index: 0; }
+.lbl { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 700; color: var(--muted); min-width: 0; }
+select.field { appearance: auto; }
+@media (min-width: 900px) {
+  .admin-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); align-items: start; }
+  .admin-map { height: 560px; }
+}

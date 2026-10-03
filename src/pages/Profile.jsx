@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { TopBar } from '../components/bits.jsx';
 import Icon from '../components/Icon.jsx';
 import { useUser, useCollection } from '../lib/store.js';
+import { useAdmin } from '../lib/admin.js';
+import { Link } from 'react-router-dom';
 import { signInWithGoogle, logOut, firebaseReady, signInWithEmail, signUpWithEmail, resetPassword, authMessage } from '../lib/firebase.js';
 
 function SignIn() {
@@ -56,6 +58,12 @@ function SignIn() {
   );
 }
 
+function AdminLink() {
+  const { isAdmin } = useAdmin();
+  if (!isAdmin) return null;
+  return <Link to="/admin" className="btn" style={{ textDecoration: 'none' }}><Icon name="pencil" size={18} />Open admin panel</Link>;
+}
+
 let deferredPrompt = null;
 window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferredPrompt = e; });
 
@@ -86,6 +94,7 @@ export default function Profile() {
               <div className="grow"><b style={{ fontSize: 17 }}>{user.displayName || 'Traveller'}</b><div className="sub">{user.email}</div></div>
             </div>
             <div className="sub">Your trips, saves and notes sync across all your devices.</div>
+            <AdminLink />
             <button className="btn ghost" onClick={logOut}><Icon name="logout" size={18} />Log out</button>
           </>
         ) : (

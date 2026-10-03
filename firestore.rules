@@ -2,24 +2,44 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // An admin is anyone whose user ID has a document in the "admins" collection
+    // (created once by you in the Firebase console).
+    function isAdmin() {
+      return request.auth != null && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
     // Each user's saves, trips and notes are private to them
     match /users/{uid}/{collection}/{docId} {
       allow read, write: if request.auth != null && request.auth.uid == uid
         && collection in ['saves', 'trips', 'notes'];
     }
 
-    // Anyone can report a reel/link the app couldn't read; only you read them (in the Firebase console)
+    // Admin list: you can check your own entry; only the console can add admins
+    match /admins/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow write: if false;
+    }
+
+    // Places added by hand in the admin panel: everyone can read, only admins edit
+    match /places/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Reports: anyone can send one; only admins read or clear them
     match /reports/{id} {
       allow create: if request.resource.data.keys().hasOnly(['type', 'url', 'caption', 'reason', 'message', 'uid', 'createdAt', 'destination'])
         && request.resource.data.get('message', '').size() < 2000
         && request.resource.data.get('caption', '').size() < 5000;
-      allow read, update, delete: if false;
+      allow read, delete: if isAdmin();
+      allow update: if false;
     }
 
-    // Shared AI picks per area: everyone can read, only the server (/api/discover) writes
+    // Shared AI picks per area: everyone reads, the server creates, admins can fix or clear
     match /discover/{id} {
       allow read: if true;
-      allow write: if false;
+      allow update, delete: if isAdmin();
+      allow create: if false;
     }
 
     // Live crowd check-ins: anonymous, small, readable by all
@@ -29,7 +49,8 @@ service cloud.firestore {
         && request.resource.data.level is int
         && request.resource.data.level >= 0 && request.resource.data.level <= 3
         && request.resource.data.placeKey is string && request.resource.data.placeKey.size() < 140;
-      allow update, delete: if false;
+      allow delete: if isAdmin();
+      allow update: if false;
     }
   }
 }
