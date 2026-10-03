@@ -76,14 +76,14 @@ export default function Home() {
         <Scene timeOfDay={timeOfDay} weather={weather?.kind} kind="home" height={desktop ? 580 : 470} />
         <div style={{ position: 'absolute', inset: 0 }}>
           <div className="container" style={{ height: '100%' }}>
-            <div className="row" style={{ position: 'absolute', left: 20, right: 20, top: 'calc(20px + env(safe-area-inset-top))', justifyContent: 'space-between' }}>
+            <div className="row" style={{ position: 'absolute', left: 'var(--gutter)', right: 'var(--gutter)', top: 'calc(20px + env(safe-area-inset-top))', justifyContent: 'space-between' }}>
               <div style={{ fontFamily: 'var(--serif)', fontSize: desktop ? 26 : 22, fontWeight: 700, color: ink }}>Wanderpin</div>
               <div className="row">
                 <Link to="/profile" className="icon-btn glass only-mobile" aria-label="Profile and settings"><Icon name="user" size={20} /></Link>
                 <GlobeSlot />
               </div>
             </div>
-            <div style={{ position: 'absolute', left: 20, right: 20, top: desktop ? 150 : 'calc(92px + env(safe-area-inset-top))', display: 'flex', flexDirection: 'column', gap: desktop ? 14 : 10, color: ink, maxWidth: 640 }}>
+            <div style={{ position: 'absolute', left: 'var(--gutter)', right: 'var(--gutter)', top: desktop ? 150 : 'calc(92px + env(safe-area-inset-top))', display: 'flex', flexDirection: 'column', gap: desktop ? 14 : 10, color: ink, maxWidth: 640 }}>
               <div style={{ fontSize: desktop ? 18 : 15, fontWeight: 500 }}>{greeting(timeOfDay)}</div>
               <h1 className="hero-title">Where to next?</h1>
               {desktop && <div style={{ fontSize: 18, lineHeight: 1.5, maxWidth: 520, opacity: .85 }}>Itineraries, cafes, couple spots, famous food, crowds and scams for any place. Or turn a travel reel into your trip.</div>}
@@ -96,7 +96,7 @@ export default function Home() {
                 </div>
               </div>
             </div>
-            <div style={{ position: 'absolute', left: 20, right: 20, bottom: -28, zIndex: 5, maxWidth: desktop ? 680 : 'none' }}>
+            <div style={{ position: 'absolute', left: 'var(--gutter)', right: 'var(--gutter)', bottom: -28, zIndex: 5, maxWidth: desktop ? 720 : 'none' }}>
               <SearchBox />
             </div>
           </div>
@@ -135,8 +135,8 @@ export default function Home() {
             <div className="sub">{loc ? `Spots around ${loc.name}, or search anywhere` : 'Pick a vibe, then choose where'}</div>
           </div>
           <div className="masonry">
-            <div>{[MOODS[0], MOODS[2]].map((m) => <MoodTile key={m.cat} m={desktop ? { ...m, h: 260 } : m} onClick={() => nav(moodUrl(m.cat))} />)}</div>
-            <div>{[MOODS[1], MOODS[3]].map((m) => <MoodTile key={m.cat} m={desktop ? { ...m, h: 260 } : m} onClick={() => nav(moodUrl(m.cat))} />)}</div>
+            <div>{[MOODS[0], MOODS[2]].map((m) => <MoodTile key={m.cat} m={desktop ? { ...m, h: 300 } : m} onClick={() => nav(moodUrl(m.cat))} />)}</div>
+            <div>{[MOODS[1], MOODS[3]].map((m) => <MoodTile key={m.cat} m={desktop ? { ...m, h: 300 } : m} onClick={() => nav(moodUrl(m.cat))} />)}</div>
           </div>
           <div className="row wrap">
             {MORE.map(([cat, label]) => <button key={cat} className="chip" onClick={() => nav(moodUrl(cat))}>{label}</button>)}
@@ -218,11 +218,12 @@ function PlanCard({ to, icon, iconBg, iconFg, title, desc, dark }) {
 }
 
 function DestCard({ d }) {
+  const desktop = useIsDesktop();
   const { time, hour } = localTime(d.tz);
   return (
     <Link to={placeUrl(d)} className="dest-card">
       <div style={{ position: 'relative', borderRadius: 18, overflow: 'hidden' }}>
-        <Scene kind={d.kind} timeOfDay={timeOfDayFromHour(hour)} height={150} />
+        <Scene kind={d.kind} timeOfDay={timeOfDayFromHour(hour)} height={desktop ? 190 : 150} />
         <span className="tag" style={{ position: 'absolute', left: 10, top: 10 }}><Icon name="clock" size={13} />{time}</span>
       </div>
       <div style={{ padding: '10px 4px 2px' }}>
