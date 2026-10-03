@@ -5,6 +5,7 @@ import Icon from '../components/Icon.jsx';
 import { TopBar, SaveButton, PinTile, PlaceRow, Sheet, Skeleton } from '../components/bits.jsx';
 import { useLiveConditions } from '../lib/useLive.js';
 import { getGuide, getNearby, detectSceneKind, estimateCrowd, buildItinerary, CATEGORIES } from '../lib/api.js';
+import { useIsDesktop } from '../lib/useMedia.js';
 import { addItem, sendReport, sendCrowdReport, recentCrowd, saveKey, useToast } from '../lib/store.js';
 
 const TABS = [
@@ -28,6 +29,7 @@ export default function Place() {
   const [reportOpen, setReportOpen] = useState(false);
   const toast = useToast();
   const nav = useNavigate();
+  const desktop = useIsDesktop();
 
   useEffect(() => {
     let alive = true;
@@ -75,7 +77,7 @@ export default function Place() {
       } />
 
       <div style={{ position: 'relative', borderRadius: 28, overflow: 'hidden' }}>
-        <Scene timeOfDay={timeOfDay} weather={weather?.kind} kind={kind} height={300} />
+        <Scene timeOfDay={timeOfDay} weather={weather?.kind} kind={kind} height={desktop ? 420 : 300} />
         <div className="row wrap" style={{ position: 'absolute', left: 14, top: 14, right: 70 }}>
           <span className="row" style={{ background: 'var(--paper)', borderRadius: 20, padding: '8px 12px', fontSize: 13, fontWeight: 500, gap: 6 }}>
             <Icon name={weather?.kind === 'rain' ? 'rain' : weather?.kind === 'cloudy' ? 'cloud' : timeOfDay === 'night' ? 'moon' : 'sun'} size={16} />
@@ -87,9 +89,9 @@ export default function Place() {
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        <h1 style={{ fontSize: 44, lineHeight: 1 }}>{name}</h1>
+        <h1 style={{ fontSize: desktop ? 64 : 44, lineHeight: 1 }}>{name}</h1>
         {region && <div className="sub">{region}</div>}
-        {guide?.summary && <p style={{ margin: '6px 0 0', fontSize: 15, lineHeight: 1.5, color: 'var(--muted)' }}>{guide.summary}</p>}
+        {guide?.summary && <p style={{ margin: '6px 0 0', fontSize: desktop ? 17 : 15, lineHeight: 1.55, color: 'var(--muted)', maxWidth: 820 }}>{guide.summary}</p>}
       </div>
 
       <div className="chips" role="tablist" aria-label="Sections">
@@ -138,7 +140,7 @@ export default function Place() {
       {tab === 'itinerary' && (
         <section className="section">
           <div className="section-head"><h2>Suggested plan</h2>{itinerary?.length > 0 && <button className="btn accent" style={{ height: 40 }} onClick={saveTrip}><Icon name="bookmark" size={18} />Save & edit</button>}</div>
-          {!itinerary ? <Skeleton h={90} /> : itinerary.length === 0 ? <div className="sub">Not enough info to build a plan for this place yet. Try a nearby city, or build your own trip.</div> : itinerary.map((day) => (
+          {!itinerary ? <Skeleton h={90} /> : itinerary.length === 0 ? <div className="sub">Not enough info to build a plan for this place yet. Try a nearby city, or build your own trip.</div> : <div className="list wide3">{itinerary.map((day) => (
             <div key={day.title} className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <h3 style={{ fontSize: 20 }}>{day.title}</h3>
               {day.stops.map((s, i) => (
@@ -152,7 +154,7 @@ export default function Place() {
                 </div>
               ))}
             </div>
-          ))}
+          ))}</div>}
         </section>
       )}
 

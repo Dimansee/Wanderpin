@@ -38,7 +38,7 @@ img { max-width: 100%; display: block; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .app {
-  max-width: 560px;
+  width: 100%;
   margin: 0 auto;
   min-height: 100vh;
   position: relative;
@@ -47,7 +47,7 @@ img { max-width: 100%; display: block; }
 
 .ic { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 
-.page { padding: 20px 20px 0; display: flex; flex-direction: column; gap: 24px; }
+.page { width: 100%; max-width: 1180px; margin: 0 auto; padding: 20px 20px 0; display: flex; flex-direction: column; gap: 24px; }
 .section { display: flex; flex-direction: column; gap: 12px; }
 .section-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
 .section-head h2 { font-size: 22px; }
@@ -133,10 +133,10 @@ textarea.field { min-height: 110px; resize: vertical; }
 
 /* scene animations */
 @keyframes rise { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-8px) } }
-@keyframes drift { 0% { transform: translateX(-140px) } 100% { transform: translateX(640px) } }
-@keyframes drift2 { 0% { transform: translateX(640px) } 100% { transform: translateX(-160px) } }
+@keyframes drift { 0% { transform: translateX(-140px) } 100% { transform: translateX(var(--w, 640px)) } }
+@keyframes drift2 { 0% { transform: translateX(var(--w, 640px)) } 100% { transform: translateX(-160px) } }
 @keyframes float { 0%,100% { transform: translate(0,0) } 50% { transform: translate(6px,-12px) } }
-@keyframes flap { 0% { transform: translate(-40px,30px) } 100% { transform: translate(640px,-10px) } }
+@keyframes flap { 0% { transform: translate(-40px,30px) } 100% { transform: translate(var(--w, 640px),-10px) } }
 @keyframes twinkle { 0%,100% { opacity: .25 } 50% { opacity: 1 } }
 @keyframes ripple { 0%,100% { opacity: .4; transform: scaleX(.8) } 50% { opacity: 1; transform: scaleX(1.1) } }
 @keyframes bob { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-3px) } }
@@ -171,4 +171,47 @@ textarea.field { min-height: 110px; resize: vertical; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; }
+}
+
+/* ---------- responsive layout ---------- */
+.container { width: 100%; max-width: 1180px; margin: 0 auto; padding: 0 20px; position: relative; }
+.nav-label { display: none; }
+.tools-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.two-col { display: grid; grid-template-columns: 1fr; gap: 24px; }
+.hero-title { font-size: 42px; line-height: 1.02; }
+.only-desktop { display: none !important; }
+
+@media (min-width: 640px) {
+  .list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .list.single { display: flex; }
+}
+
+@media (min-width: 900px) {
+  :root { --nav-h: 60px; }
+  .app { padding-bottom: 48px; }
+  .page { padding-top: 96px; gap: 32px; }
+  .only-mobile { display: none !important; }
+  .only-desktop { display: initial !important; }
+  .nav-label { display: inline; font-size: 14px; font-weight: 700; }
+  .wp-nav {
+    top: 16px !important; bottom: auto !important; width: auto !important; max-width: none !important;
+    padding: 0 8px; gap: 4px; justify-content: center !important;
+  }
+  .wp-nav a { width: auto !important; padding: 0 16px; gap: 8px; border-radius: 24px; }
+  .wp-nav a.active { background: rgba(255,253,249,.12); }
+  .wp-nav a.reel { height: 44px !important; }
+  .masonry { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+  .masonry > div { display: contents; }
+  .tools-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+  .two-col { grid-template-columns: 1.3fr 1fr; align-items: stretch; }
+  .hero-title { font-size: clamp(52px, 5.6vw, 76px); }
+  .section-head h2, .section > h2 { font-size: 26px; }
+  .toast { bottom: 32px; }
+  .sheet-backdrop { align-items: center; }
+  .sheet { border-radius: 28px; max-width: 520px; }
+  .list { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+}
+
+@media (min-width: 1200px) {
+  .list.wide3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }

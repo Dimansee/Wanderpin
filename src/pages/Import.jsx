@@ -72,7 +72,7 @@ export default function Import() {
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 18, padding: '40px 0' }}>
           <Globe size={120} />
           <div style={{ fontFamily: 'var(--serif)', fontSize: 22, fontWeight: 700 }}>{STEPS[step]}…</div>
-          <div className="list" style={{ width: '100%', maxWidth: 300 }}>
+          <div className="list single" style={{ width: '100%', maxWidth: 300 }}>
             {STEPS.map((s, i) => (
               <div key={s} className="row" style={{ gap: 10, color: i <= step ? 'var(--ink)' : 'var(--muted)', opacity: i <= step ? 1 : .5 }}>
                 <Icon name={i < step ? 'check' : 'clock'} size={18} />{s}
